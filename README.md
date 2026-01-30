@@ -115,6 +115,35 @@ print(response.regs.R0)            # Register R0 value
 print(response.regs.R1.signed)     # R1 as signed value
 ```
 
+#### Memory and Register Operations
+
+```python
+from lc3sim import LC3Sim, LC3Value
+
+sim = LC3Sim()
+sim.load_file('program.obj')
+
+# --- Memory Operations ---
+# Write to memory
+sim.write_mem(LC3Value('x3000'), LC3Value('x1234'))
+
+# Read from memory
+value = sim.read_mem(LC3Value('x3000'))
+print(f"Memory at x3000: {value}")  # Output: Memory at x3000: x1234
+
+# --- Register Operations ---
+# Set a register value
+sim.set_reg('R0', LC3Value('xABCD'))
+sim.set_reg('R1', LC3Value('x0042'))
+sim.set_reg('PC', LC3Value('x3000'))
+
+# Read all registers
+regs = sim.read_regs()
+print(f"R0: {regs.R0}")            # Output: R0: xABCD
+print(f"R1: {regs.R1}")            # Output: R1: x0042
+print(f"R1 (signed): {regs.R1.signed}")  # Output: R1 (signed): 66
+```
+
 ### LC3Response - Comparing Output
 
 ```python
@@ -216,6 +245,15 @@ When a test fails, the framework displays a detailed diff report:
 
 ![Failed Test Screenshot](imgs/image_failed.png)
 
+## Examples
+
+See the `examples/` directory for complete working examples:
+
+- `examples/01_basic_sim.py` - Basic simulator usage
+- `examples/02_memory_registers.py` - Memory and register operations
+- `examples/03_random_tests.py` - Parallel random testing
+- `examples/04_boundary_tests.py` - Boundary/edge case testing
+
 ## Complete Example
 
 Here's a complete example for testing an LC-3 program:
@@ -303,6 +341,16 @@ if __name__ == "__main__":
 | `set_pc(LC3Value)` | Set the program counter |
 | `sim_continue()` | Run until HALT, returns LC3Response |
 | `send_command(cmd)` | Send raw command to simulator |
+| `read_mem(addr)` | Read memory at address, returns LC3Value |
+| `write_mem(addr, data)` | Write data to memory address |
+| `read_regs()` | Read all registers, returns LC3Regs |
+| `set_reg(reg, data)` | Set a register (e.g., 'R0', 'PC') to a value |
+
+### LC3Regs
+
+| Property | Description |
+|----------|-------------|
+| `R0` - `R7` | General purpose registers (LC3Value) |
 
 ### LC3Response
 
