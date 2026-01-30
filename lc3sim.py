@@ -1019,4 +1019,16 @@ class LC3SequenceTest:
         return self.failed_count == 0
 
 
+# --- Import Welcome Message ---
+_welcome_printed = False
+
+def _print_welcome():
+    global _welcome_printed
+    if not _welcome_printed:
+        print("Welcome to use LC3 Test Framework. Designed by qiufuyu. Github: qiufuyu123/lc3test")
+        _welcome_printed = True
+
+_print_welcome()
+
+
 # --- Usage Example ---
