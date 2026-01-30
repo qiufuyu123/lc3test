@@ -267,6 +267,8 @@ class LC3Sim:
 import time
 import sys
 import traceback
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import threading
 
 class LC3RandomGenTests:
     # --- ANSI Color Definitions ---
@@ -281,13 +283,21 @@ class LC3RandomGenTests:
         BOLD = '\033[1m'
         UNDERLINE = '\033[4m'
 
-    def __init__(self, test_nums=100):
+    def __init__(self, test_nums=100, max_workers=None):
+        """
+        Initialize the parallel random test framework
+        :param test_nums: Number of test cases to run
+        :param max_workers: Max parallel workers (default: min(32, cpu_count + 4))
+        """
         self.test_nums = test_nums
+        self.max_workers = max_workers
         self.passed_count = 0
         self.failed_count = 0
-        self.failed_cases = [] # Record failed case IDs and reasons
+        self.failed_cases = []  # Record failed case IDs and reasons
         self.start_time = 0
         self.end_time = 0
+        self._lock = threading.Lock()  # Thread lock for counters
+        self._completed = 0  # Track completed tests for progress
 
     def run_case(self, case_num):
         """
@@ -300,10 +310,26 @@ class LC3RandomGenTests:
         if random.random() < 0.05:
             # Simulate random failure
             if random.random() < 0.5:
-                return False # Logic error returns False
+                return False  # Logic error returns False
             else:
-                raise ValueError("Simulated Exception") # Simulate crash
+                raise ValueError("Simulated Exception")  # Simulate crash
         return True
+
+    def _run_single_case(self, case_num):
+        """
+        Internal wrapper to run a single test case and return result
+        :param case_num: Test case number
+        :return: Tuple of (case_num, passed, error_msg or None)
+        """
+        try:
+            is_pass = self.run_case(case_num)
+            if is_pass:
+                return (case_num, True, None)
+            else:
+                return (case_num, False, "Assertion Failed (Returned False)")
+        except Exception as e:
+            error_msg = f"{type(e).__name__}: {str(e)}"
+            return (case_num, False, error_msg)
 
     def _print_progress(self, current, total, bar_length=40):
         """
@@ -318,46 +344,61 @@ class LC3RandomGenTests:
         sys.stdout.flush()
 
     def run_all(self):
-        print(f"{self.Colors.HEADER}{self.Colors.BOLD}>>> Starting LC3 Random Tests ({self.test_nums} test cases)...{self.Colors.RESET}\n")
+        """
+        Execute all test cases in parallel using ThreadPoolExecutor
+        """
+        print(f"{self.Colors.HEADER}{self.Colors.BOLD}>>> Starting LC3 Parallel Random Tests ({self.test_nums} test cases)...{self.Colors.RESET}")
+        
+        # Determine worker count
+        if self.max_workers is None:
+            import os
+            self.max_workers = min(32, (os.cpu_count() or 1) + 4)
+        
+        print(f"{self.Colors.CYAN}Using {self.max_workers} parallel workers{self.Colors.RESET}\n")
         
         self.start_time = time.time()
+        self._completed = 0
         
-        for i in range(1, self.test_nums + 1):
-            try:
-                # Execute test
-                is_pass = self.run_case(i)
+        # Submit all tasks to thread pool
+        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            # Submit all test cases
+            futures = {executor.submit(self._run_single_case, i): i for i in range(1, self.test_nums + 1)}
+            
+            # Process results as they complete
+            for future in as_completed(futures):
+                case_num, passed, error_msg = future.result()
                 
-                if is_pass:
-                    self.passed_count += 1
-                else:
-                    self.failed_count += 1
-                    self.failed_cases.append({'id': i, 'reason': "Assertion Failed (Returned False)"})
+                with self._lock:
+                    if passed:
+                        self.passed_count += 1
+                    else:
+                        self.failed_count += 1
+                        self.failed_cases.append({'id': case_num, 'reason': error_msg})
                     
-            except Exception as e:
-                # Catch all crashes in run_case, don't let entire test stop
-                self.failed_count += 1
-                # Get brief error message
-                error_msg = f"{type(e).__name__}: {str(e)}"
-                self.failed_cases.append({'id': i, 'reason': error_msg})
-
-            # Update progress bar
-            self._print_progress(i, self.test_nums)
+                    self._completed += 1
+                    # Update progress bar
+                    self._print_progress(self._completed, self.test_nums)
 
         self.end_time = time.time()
         # Newline after completion
-        print("\n") 
+        print("\n")
+        
+        # Sort failed cases by ID for consistent output
+        self.failed_cases.sort(key=lambda x: x['id'])
+        
         self.report()
 
     def report(self):
         duration = self.end_time - self.start_time
         
         print(f"{self.Colors.HEADER}{'='*60}{self.Colors.RESET}")
-        print(f"{self.Colors.BOLD}Test Report{self.Colors.RESET}")
+        print(f"{self.Colors.BOLD}Test Report (Parallel){self.Colors.RESET}")
         print(f"{self.Colors.HEADER}{'='*60}{self.Colors.RESET}")
         
         # Print summary
         print(f"Duration:     {duration:.4f} seconds")
         print(f"Avg Time:     {duration/self.test_nums*1000:.2f} ms/case")
+        print(f"Throughput:   {self.test_nums/duration:.1f} cases/sec")
         
         print(f"Total:        {self.test_nums}")
         print(f"{self.Colors.GREEN}Passed:       {self.passed_count}{self.Colors.RESET}")
@@ -381,5 +422,141 @@ class LC3RandomGenTests:
             print(f"\n{self.Colors.GREEN}{self.Colors.BOLD}🎉 All Tests Passed! 🎉{self.Colors.RESET}")
 
         print(f"{self.Colors.HEADER}{'='*60}{self.Colors.RESET}\n")
+
+
+class LC3SequenceTest:
+    """
+    A test framework for running individual/sequential test cases.
+    Useful for boundary tests, edge cases, or specific scenarios.
+    Each test case has a name and a test function.
+    """
+    # --- ANSI Color Definitions ---
+    class Colors:
+        HEADER = '\033[95m'
+        BLUE = '\033[94m'
+        CYAN = '\033[96m'
+        GREEN = '\033[92m'
+        YELLOW = '\033[93m'
+        RED = '\033[91m'
+        RESET = '\033[0m'
+        BOLD = '\033[1m'
+        UNDERLINE = '\033[4m'
+
+    def __init__(self, name="LC3 Sequence Test"):
+        """
+        Initialize the sequence test framework
+        :param name: Name of the test suite
+        """
+        self.name = name
+        self.test_cases = []  # List of (name, test_func) tuples
+        self.passed_count = 0
+        self.failed_count = 0
+        self.failed_cases = []
+        self.start_time = 0
+        self.end_time = 0
+
+    def add_test(self, name, test_func):
+        """
+        Add a test case to the sequence
+        :param name: Descriptive name for the test case
+        :param test_func: A callable that returns True for pass, False for fail
+        """
+        self.test_cases.append((name, test_func))
+        return self
+
+    def test(self, name):
+        """
+        Decorator to add a test function
+        Usage:
+            @seq_test.test("My Test Name")
+            def my_test():
+                return True  # or False
+        """
+        def decorator(func):
+            self.add_test(name, func)
+            return func
+        return decorator
+
+    def run_all(self):
+        """
+        Execute all registered test cases sequentially
+        """
+        total = len(self.test_cases)
+        print(f"{self.Colors.HEADER}{self.Colors.BOLD}>>> Starting {self.name} ({total} test cases)...{self.Colors.RESET}\n")
+        print(f"{'-'*70}")
+        print(f"{'#':<4} {'Test Name':<45} {'Result':<10} {'Time'}")
+        print(f"{'-'*70}")
+        
+        self.start_time = time.time()
+        
+        for idx, (test_name, test_func) in enumerate(self.test_cases, 1):
+            case_start = time.time()
+            try:
+                result = test_func()
+                case_duration = (time.time() - case_start) * 1000  # ms
+                
+                if result:
+                    self.passed_count += 1
+                    status = f"{self.Colors.GREEN}PASS{self.Colors.RESET}"
+                else:
+                    self.failed_count += 1
+                    self.failed_cases.append({'name': test_name, 'reason': "Returned False"})
+                    status = f"{self.Colors.RED}FAIL{self.Colors.RESET}"
+                    
+            except Exception as e:
+                case_duration = (time.time() - case_start) * 1000
+                self.failed_count += 1
+                error_msg = f"{type(e).__name__}: {str(e)}"
+                self.failed_cases.append({'name': test_name, 'reason': error_msg})
+                status = f"{self.Colors.RED}ERROR{self.Colors.RESET}"
+
+            # Print result for this test case
+            # Truncate long test names
+            display_name = test_name[:42] + "..." if len(test_name) > 45 else test_name
+            print(f"{idx:<4} {display_name:<45} {status:<19} {case_duration:.2f}ms")
+
+        self.end_time = time.time()
+        print(f"{'-'*70}\n")
+        self.report()
+
+    def report(self):
+        """
+        Print final test report summary
+        """
+        duration = self.end_time - self.start_time
+        total = len(self.test_cases)
+        
+        print(f"{self.Colors.HEADER}{'='*60}{self.Colors.RESET}")
+        print(f"{self.Colors.BOLD}Test Report: {self.name}{self.Colors.RESET}")
+        print(f"{self.Colors.HEADER}{'='*60}{self.Colors.RESET}")
+        
+        # Print summary
+        print(f"Duration:     {duration:.4f} seconds")
+        if total > 0:
+            print(f"Avg Time:     {duration/total*1000:.2f} ms/case")
+        
+        print(f"Total:        {total}")
+        print(f"{self.Colors.GREEN}Passed:       {self.passed_count}{self.Colors.RESET}")
+        
+        if self.failed_count > 0:
+            print(f"{self.Colors.RED}Failed:       {self.failed_count}{self.Colors.RESET}")
+            print(f"{self.Colors.YELLOW}Pass Rate:    {self.passed_count/total*100:.2f}%{self.Colors.RESET}")
+            
+            print(f"\n{self.Colors.RED}>>> Failure Details:{self.Colors.RESET}")
+            print(f"{'-'*60}")
+            print(f"{'Test Name':<35} | {'Error Reason'}")
+            print(f"{'-'*60}")
+            
+            # Show all failures for sequence tests (usually fewer cases)
+            for fail in self.failed_cases:
+                name = fail['name'][:32] + "..." if len(fail['name']) > 35 else fail['name']
+                print(f"{name:<35} | {fail['reason']}")
+        else:
+            print(f"\n{self.Colors.GREEN}{self.Colors.BOLD}🎉 All Tests Passed! 🎉{self.Colors.RESET}")
+
+        print(f"{self.Colors.HEADER}{'='*60}{self.Colors.RESET}\n")
+        
+        return self.failed_count == 0
+
 
 # --- Usage Example ---
