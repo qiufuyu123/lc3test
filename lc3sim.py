@@ -251,7 +251,15 @@ class LC3Sim:
         return tmp
     def before(self):
         return self.child.before
-    
+    def randomize_reg(self):
+        self.send_command("r r0 x1234")
+        self.send_command("r r1 x5678")
+        self.send_command("r r2 x9ABC")
+        self.send_command("r r3 xDEF0")
+        self.send_command("r r4 x1111")
+        self.send_command("r r5 x2222")
+        self.send_command("r r6 x3333")
+        self.send_command("r r7 x4444")
     def send_command(self,command):
         self.child.sendline(command)
         return self.wait_for_input().replace(command,'').strip()
@@ -261,6 +269,7 @@ class LC3Sim:
         return self.send_command(f'file {file}')
     
     def sim_continue(self):
+        self.randomize_reg()
         raw= self.send_command('continue')
         return LC3Response(raw)
     
