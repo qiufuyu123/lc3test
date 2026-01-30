@@ -2,6 +2,8 @@
 
 A Python-based testing framework for the LC-3 (Little Computer 3) simulator. This library provides utilities for automating LC-3 program testing, including value manipulation, register inspection, and randomized test generation.
 
+![Boundary Test Screenshot](imgs/image_boundarytest.png)
+
 ## Features
 
 - **LC3Value**: A robust 16-bit value class with support for various input formats (hex, decimal, LC-3 notation)
@@ -165,32 +167,9 @@ tests.set_target('my_program.obj')
 tests.run_all()
 ```
 
-Sample output:
-```
->>> Starting LC3 Parallel Random Tests (100 test cases)...
-Using 8 parallel workers
+**Random Test Output:**
 
-Progress: [========================================>] 100.0% (100/100)
-
-============================================================
-Test Report (Parallel)
-============================================================
-Duration:     1.2345 seconds
-Avg Time:     12.35 ms/case
-Throughput:   81.0 cases/sec
-Total:        100
-Passed:       98
-Failed:       2
-Pass Rate:    98.00%
-
->>> Failure Details:
-------------------------------------------------------------
-Case ID    | Error Reason
-------------------------------------------------------------
-Case 23    | Assertion Failed (Returned False)
-Case 67    | ValueError: Invalid input
-============================================================
-```
+![Random Test Screenshot](imgs/image_randomtest.png)
 
 ### LC3SequenceTest - Boundary/Edge Case Testing
 
@@ -231,36 +210,11 @@ boundary_tests.add_test("All digits 0-9", lambda: run_test('program.obj', "01234
 boundary_tests.run_all()
 ```
 
-Sample output:
-```
->>> Starting MP1 Boundary Tests (4 test cases)...
+### Test Failure Output
 
-----------------------------------------------------------------------
-#    Test Name                                     Result     Time
-----------------------------------------------------------------------
-1    Empty string input                            PASS       45.23ms
-2    Single character 'A'                          PASS       43.12ms
-3    Maximum length input (500 chars)              FAIL       52.34ms
-4    All digits 0-9                                PASS       44.56ms
-----------------------------------------------------------------------
+When a test fails, the framework displays a detailed diff report:
 
-============================================================
-Test Report: MP1 Boundary Tests
-============================================================
-Duration:     0.1853 seconds
-Avg Time:     46.31 ms/case
-Total:        4
-Passed:       3
-Failed:       1
-Pass Rate:    75.00%
-
->>> Failure Details:
-------------------------------------------------------------
-Test Name                           | Error Reason
-------------------------------------------------------------
-Maximum length input (500 chars)    | Returned False
-============================================================
-```
+![Failed Test Screenshot](imgs/image_failed.png)
 
 ## Complete Example
 
